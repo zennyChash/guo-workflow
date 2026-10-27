@@ -1,0 +1,35 @@
+# Maven
+target/
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# Runtime
+*.log
+logs/
+work/
+/workflow-boot/lib/*.jar
+
+# Local configuration and secrets
+.local/
+.env
+.env.*
+!.env.example
+/workflow-boot/src/main/resources/application-local.yml
+application-*.local.yml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+

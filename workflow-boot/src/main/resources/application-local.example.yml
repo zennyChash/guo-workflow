@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: ${WORKFLOW_DB_URL:jdbc:mysql://localhost:3306/guo_workflow?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${WORKFLOW_DB_USERNAME:root}
+    password: ${WORKFLOW_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
