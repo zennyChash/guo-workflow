@@ -1,0 +1,33 @@
+# Maven
+target/
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# Runtime
+*.log
+logs/
+work/
+
+# Local configuration and secrets
+.local/
+.env
+.env.*
+!.env.example
+application-*.local.yml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+

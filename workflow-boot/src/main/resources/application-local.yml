@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    url: ${FLOWABLE_DB_URL:jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${FLOWABLE_DB_USERNAME:sa}
+    password: ${FLOWABLE_DB_PASSWORD:}
+    driver-class-name: ${FLOWABLE_DB_DRIVER:org.h2.Driver}
+
