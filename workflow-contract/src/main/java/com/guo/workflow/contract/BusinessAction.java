@@ -7,6 +7,8 @@ public interface BusinessAction {
 
     ActionType type();
 
+    ActionDoType doType();
+
     void execute(ActionInvocation invocation, ActionDefinition definition);
 }
 

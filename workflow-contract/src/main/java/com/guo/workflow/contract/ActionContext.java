@@ -17,8 +17,15 @@ public record ActionContext(
         Map<String, Object> attributes) {
 
     public ActionContext {
-        variables = immutableCopy(variables);
+        variables = mutableCopy(variables);
         attributes = immutableCopy(attributes);
+    }
+
+    private static Map<String, Object> mutableCopy(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        return new LinkedHashMap<>(source);
     }
 
     private static Map<String, Object> immutableCopy(Map<String, Object> source) {

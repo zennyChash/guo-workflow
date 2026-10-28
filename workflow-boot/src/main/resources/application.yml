@@ -9,6 +9,22 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+  # ============ 新增：自定义工作流引擎配置 ============
+guo:
+  workflow:
+    # 指定当前使用的数据库方言类型（mysql 或 oracle），代码里通过 @Value 读取
+    db-type: mysql
+    # 消费者轮询时的单次拉取限制条数
+    fetch-size: 10
+    async:
+      core-pool-size: 2
+      max-pool-size: 4
+      queue-capacity: 100
+      retry-base-seconds: 2
+      retry-max-delay-seconds: 300
+      jitter-ratio: 0.2
+      processing-timeout-seconds: 600
+
 flowable:
   async-executor-activate: false
   check-process-definitions: false

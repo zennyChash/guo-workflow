@@ -1,5 +1,6 @@
-package com.guo.workflow.executor;
+package com.guo.workflow.dispatcher;
 
+import com.guo.workflow.contract.ActionDoType;
 import com.guo.workflow.contract.ActionType;
 import com.guo.workflow.contract.BusinessAction;
 
@@ -8,6 +9,6 @@ import com.guo.workflow.contract.BusinessAction;
  */
 public interface BusinessActionRegistry {
 
-    BusinessAction resolve(ActionType type);
+    BusinessAction resolve(ActionType type, ActionDoType doType);
 }
 

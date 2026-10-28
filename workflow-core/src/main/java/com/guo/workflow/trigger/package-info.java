@@ -1,9 +1,8 @@
 /**
- * Flowable TaskListener and ExecutionListener adapters belong in this package.
+ * Flowable lifecycle adapters that translate task events into action invocations.
  *
- * <p>This package is intentionally empty in the scaffold. Trigger code must translate
- * lifecycle events into {@code ActionInvocation} objects and leave transaction and
- * dispatch decisions to the dispatcher layer.</p>
+ * <p>Trigger code owns context assembly only. Transaction and dispatch decisions
+ * remain in the dispatcher layer.</p>
  */
 package com.guo.workflow.trigger;
 

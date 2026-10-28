@@ -4,14 +4,20 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * Selects the business action implementation without conditional dispatch logic.
+ * Declares the business intent of an action independently from its implementation.
  */
 public enum ActionType {
+    /**
+     * Pre-commit validation. Validation actions must run synchronously during
+     * {@link Phase#BEFORE_COMMIT} and produce a boolean validation result.
+     */
     VALIDATE("validate"),
-    SQL("sql"),
-    STORED_PROC("stored_proc"),
-    INSTRUCTION("instruction"),
-    SCRIPT("script");
+
+    /**
+     * Business task. A job may be synchronous or asynchronous and may run before
+     * or after the workflow transaction commits.
+     */
+    JOB("job");
 
     private final String value;
 
