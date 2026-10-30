@@ -11,7 +11,8 @@ public enum ActionDoType {
     SCRIPT("script"),
     STORED_PROC("stored_proc"),
     MESSAGE("message"),
-    EXPORT("export");
+    EXPORT("export"),
+    BUSINESS("business");
 
     private final String value;
 

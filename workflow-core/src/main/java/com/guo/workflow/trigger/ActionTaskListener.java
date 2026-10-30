@@ -3,8 +3,10 @@ package com.guo.workflow.trigger;
 import com.guo.workflow.contract.ActionContext;
 import com.guo.workflow.contract.ActionEvent;
 import com.guo.workflow.contract.ActionInvocation;
+import com.guo.workflow.contract.ActionTriggerScope;
 import com.guo.workflow.dispatcher.ActionDispatcher;
 import com.guo.workflow.repository.ActionConfigRepository;
+import com.guo.workflow.service.WorkflowContextVariables;
 
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
@@ -66,9 +68,13 @@ public class ActionTaskListener implements TaskListener {
         String taskDefinitionKey = delegateTask.getTaskDefinitionKey();
         String processKey = resolveProcessDefinitionKey(processDefinitionId);
 
-         // 【重构点】：从数据库读取 XML 配置
         Optional<ActionConfigRepository.ActionConfig> configOpt =
-                configRepository.findByNodeAndEvent(processKey, taskDefinitionKey, event.value());
+                configRepository.findByDefinitionAndScope(
+                        processDefinitionId,
+                        processKey,
+                        taskDefinitionKey,
+                        ActionTriggerScope.TASK,
+                        event.value());
 
         if (configOpt.isEmpty() || configOpt.get().actionXml() == null || configOpt.get().actionXml().isBlank()) {
             log.debug("未配置动作 XML, processKey={}, taskKey={}, event={}", processKey, taskDefinitionKey, event.value());
@@ -79,10 +85,34 @@ public class ActionTaskListener implements TaskListener {
         String processInstanceId = delegateTask.getProcessInstanceId();
         String businessKey = resolveBusinessKey(processInstanceId);
 
-        // 组装上下文（注意把 businessKey 塞进 variables，防止 SQL 里取不到）
         Map<String, Object> variables = new HashMap<>(delegateTask.getVariables());
         if (businessKey != null) {
             variables.put("businessKey", businessKey);
+        }
+
+        Map<String, Object> attributes = new HashMap<>();
+        String tenantId = delegateTask.getTenantId();
+        if (tenantId != null && !tenantId.isBlank()) {
+            attributes.put("tenantId", tenantId);
+        }
+        Object operation = variables.remove(
+                WorkflowContextVariables.OPERATION);
+        if (event == ActionEvent.DELETE
+                && operation != null
+                && !operation.toString().isBlank()) {
+            attributes.put("operation", operation.toString());
+        }
+        Object returnTarget = variables.remove(
+                WorkflowContextVariables.RETURN_TARGET);
+        if (event == ActionEvent.DELETE
+                && returnTarget != null
+                && !returnTarget.toString().isBlank()) {
+            attributes.put("returnTargetActivityId", returnTarget.toString());
+        }
+        Object operator = variables.remove(
+                WorkflowContextVariables.OPERATOR);
+        if (operator != null && !operator.toString().isBlank()) {
+            attributes.put("operatorId", operator.toString());
         }
 
         ActionContext context = new ActionContext(
@@ -92,7 +122,7 @@ public class ActionTaskListener implements TaskListener {
                 delegateTask.getId(),
                 taskDefinitionKey,
                 variables,
-                new HashMap<>());
+                attributes);
 
         actionDispatcher.dispatch(new ActionInvocation(event, context, actionXml));
     }

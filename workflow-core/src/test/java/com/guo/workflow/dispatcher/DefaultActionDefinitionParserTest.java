@@ -43,9 +43,10 @@ class DefaultActionDefinitionParserTest {
                           type="job"
                           doType="message"
                           sync="false">
-                    <target>dingtalk</target>
-                    <template_id>order-approved</template_id>
-                    <template>Order #{businessKey} approved</template>
+                    <message channel="dingtalk" to="#{businessKey}">
+                      <title>Order approved</title>
+                      <content>Order #{businessKey} approved</content>
+                    </message>
                   </action>
                 </actions>
                 """;
@@ -75,7 +76,9 @@ class DefaultActionDefinitionParserTest {
         assertEquals(ActionDoType.MESSAGE, messageJob.doType());
         assertFalse(messageJob.synchronous());
         assertEquals(Phase.AFTER_COMMIT, messageJob.phase());
-        assertEquals("dingtalk", messageJob.nodes().get(0).text());
+        assertEquals("message", messageJob.nodes().get(0).name());
+        assertEquals("dingtalk", messageJob.nodes().get(0).attributes().get("channel"));
+        assertEquals("Order approved", messageJob.nodes().get(0).children().get(0).text());
     }
 
     @Test

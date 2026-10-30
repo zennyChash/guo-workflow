@@ -1,6 +1,10 @@
 package com.guo.workflow;
 
+import com.guo.workflow.mirror.ProcessActivityLog;
+import com.guo.workflow.mirror.ProcessInstanceMirror;
+import com.guo.workflow.mirror.ProcessTaskMirror;
 import com.guo.workflow.service.WorkflowEngineService;
+import com.guo.workflow.service.WorkflowQueryService;
 
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
@@ -15,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @SpringBootTest
@@ -33,6 +38,8 @@ public class EngineIntegrationTest {
 
     @Autowired
     private WorkflowEngineService workflowEngineService;
+    @Autowired
+    private WorkflowQueryService workflowQueryService;
 
     private final String processKey = "test_order_process";
 
@@ -88,6 +95,7 @@ public class EngineIntegrationTest {
         Map<String, Object> variables = new HashMap<>();
         variables.put("orderNo", "ORD-999");
         variables.put("amount", 100);
+        variables.put("nodeName_task_approve", "经理审批");
 
         String processInstanceId = workflowEngineService.startProcess(processKey, variables);
         Assertions.assertNotNull(processInstanceId);
@@ -110,5 +118,94 @@ public class EngineIntegrationTest {
         // 4. 验证动作执行后任务已结束
         Task finishedTask = taskService.createTaskQuery().processInstanceId(processInstanceId).singleResult();
         Assertions.assertNull(finishedTask, "任务应当已被删除，流程已流转");
+
+        ProcessInstanceMirror mirror = workflowQueryService
+                .findProcess(null, processInstanceId)
+                .orElseThrow();
+        Assertions.assertEquals("COMPLETED", mirror.processStatus());
+        Assertions.assertEquals("ORD-999", mirror.businessKey());
+        Assertions.assertEquals(0, mirror.activeTaskCount());
+        Assertions.assertNotNull(mirror.endTime());
+
+        List<ProcessTaskMirror> tasks = workflowQueryService
+                .findTasksByBusinessKey(null, "ORD-999");
+        Assertions.assertEquals(1, tasks.size());
+        Assertions.assertEquals("COMPLETED", tasks.get(0).taskStatus());
+        Assertions.assertEquals("task_approve", tasks.get(0).activityId());
+        Assertions.assertEquals("经理审批", tasks.get(0).nodeName());
+
+        List<ProcessActivityLog> activity = workflowQueryService
+                .findActivity(null, processInstanceId);
+        Assertions.assertTrue(activity.stream()
+                .anyMatch(log -> "START".equals(log.eventType())));
+        Assertions.assertTrue(activity.stream()
+                .anyMatch(log -> "COMPLETE".equals(log.eventType())
+                        && "TASK".equals(log.eventScope())));
+        Assertions.assertTrue(activity.stream()
+                .anyMatch(log -> "END".equals(log.eventType())));
+    }
+
+    @Test
+    public void mirrorsParallelTasksWithoutReadingFlowableTables() {
+        String processKey = "parallel_mirror_process";
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                             targetNamespace="http://flowable.org/test">
+                    <process id="%s" name="并行审批" isExecutable="true">
+                        <startEvent id="start" />
+                        <sequenceFlow sourceRef="start" targetRef="fork" />
+                        <parallelGateway id="fork" />
+                        <sequenceFlow sourceRef="fork" targetRef="task_a" />
+                        <sequenceFlow sourceRef="fork" targetRef="task_b" />
+                        <userTask id="task_a" name="部门审批" />
+                        <userTask id="task_b" name="财务审批" />
+                        <sequenceFlow sourceRef="task_a" targetRef="join" />
+                        <sequenceFlow sourceRef="task_b" targetRef="join" />
+                        <parallelGateway id="join" />
+                        <sequenceFlow sourceRef="join" targetRef="end" />
+                        <endEvent id="end" />
+                    </process>
+                </definitions>
+                """.formatted(processKey);
+        repositoryService.createDeployment()
+                .addString("parallel-mirror.bpmn20.xml", bpmnXml)
+                .deploy();
+
+        String processInstanceId = runtimeService.startProcessInstanceByKey(
+                processKey,
+                "PARALLEL-100").getProcessInstanceId();
+
+        List<ProcessTaskMirror> active = workflowQueryService.findActiveTasks(
+                null,
+                processInstanceId);
+        Assertions.assertEquals(2, active.size());
+        Assertions.assertEquals(
+                2,
+                workflowQueryService.findProcess(null, processInstanceId)
+                        .orElseThrow()
+                        .activeTaskCount());
+
+        Task firstTask = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .taskDefinitionKey("task_a")
+                .singleResult();
+        taskService.complete(firstTask.getId());
+
+        Assertions.assertEquals(
+                1,
+                workflowQueryService.findActiveTasks(null, processInstanceId).size());
+
+        Task secondTask = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .taskDefinitionKey("task_b")
+                .singleResult();
+        taskService.complete(secondTask.getId());
+
+        Assertions.assertEquals(
+                "COMPLETED",
+                workflowQueryService.findProcess(null, processInstanceId)
+                        .orElseThrow()
+                        .processStatus());
     }
 }

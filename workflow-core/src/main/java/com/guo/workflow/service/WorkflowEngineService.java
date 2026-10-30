@@ -12,4 +12,9 @@ public interface WorkflowEngineService {
      * @return 流程实例 ID
      */
     String startProcess(String processKey, Map<String, Object> variables);
+
+    /**
+     * Starts a process with explicit operator and tenant context.
+     */
+    String startProcess(StartProcessCommand command);
 }

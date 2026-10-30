@@ -14,6 +14,25 @@ guo:
   workflow:
     # 指定当前使用的数据库方言类型（mysql 或 oracle），代码里通过 @Value 读取
     db-type: mysql
+    # 生产环境默认由宿主注册同名 DataSource Bean。
+    datasources:
+      auto-create: false
+    message:
+      max-concurrency: 8
+      http:
+        connect-timeout-seconds: 5
+        request-timeout-seconds: 10
+      # 群机器人 Webhook 按需开启；未配置 webhook 时不注册对应渠道。
+      # channels:
+      #   dingtalk:
+      #     enabled: ${DINGTALK_ENABLED:false}
+      #     webhook: ${DINGTALK_WEBHOOK:}
+      #     secret: ${DINGTALK_SECRET:}
+      #     recipient-type: user-id
+      #   wecom:
+      #     enabled: ${WECOM_ENABLED:false}
+      #     webhook: ${WECOM_WEBHOOK:}
+      #     recipient-type: user-id
     # 消费者轮询时的单次拉取限制条数
     fetch-size: 10
     async:

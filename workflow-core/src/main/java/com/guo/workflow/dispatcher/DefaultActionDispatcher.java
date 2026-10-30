@@ -121,6 +121,9 @@ public class DefaultActionDispatcher implements ActionDispatcher {
                 "|",
                 invocation.context().businessKey(),
                 invocation.context().processInstanceId(),
+                invocation.context().taskId() == null
+                        ? ""
+                        : invocation.context().taskId(),
                 invocation.context().activityId(),
                 invocation.event().value(),
                 definition.type().value(),

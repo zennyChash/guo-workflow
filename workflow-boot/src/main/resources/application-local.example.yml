@@ -8,3 +8,28 @@ spring:
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 30000
+
+guo:
+  workflow:
+    message:
+      channels:
+        dingtalk:
+          enabled: ${DINGTALK_ENABLED:false}
+          webhook: ${DINGTALK_WEBHOOK:}
+          secret: ${DINGTALK_SECRET:}
+          recipient-type: ${DINGTALK_RECIPIENT_TYPE:user-id}
+        wecom:
+          enabled: ${WECOM_ENABLED:false}
+          webhook: ${WECOM_WEBHOOK:}
+          recipient-type: ${WECOM_RECIPIENT_TYPE:user-id}
+    datasources:
+      auto-create: true
+      definitions:
+        biz_db:
+          url: ${BIZ_DB_URL:jdbc:mysql://localhost:3306/biz_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+          username: ${BIZ_DB_USERNAME:root}
+          password: ${BIZ_DB_PASSWORD:}
+          driver-class-name: ${BIZ_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+          maximum-pool-size: 10
+          minimum-idle: 2
+          connection-timeout-ms: 30000

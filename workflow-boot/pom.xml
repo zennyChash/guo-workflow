@@ -71,10 +71,23 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <excludes>
+          <exclude>application-local.yml</exclude>
+        </excludes>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <arguments>
+            <argument>--spring.config.additional-location=optional:file:${project.basedir}/src/main/resources/application-local.yml</argument>
+          </arguments>
+        </configuration>
       </plugin>
     </plugins>
   </build>

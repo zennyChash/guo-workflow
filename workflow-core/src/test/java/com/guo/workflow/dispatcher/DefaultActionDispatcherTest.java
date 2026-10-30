@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,9 +33,9 @@ class DefaultActionDispatcherTest {
                       type="job"
                       doType="message"
                       sync="false">
-                <target>dingtalk</target>
-                <template_id>order-approved</template_id>
-                <template>Order #{businessKey} approved</template>
+                <message channel="dingtalk" to="#{businessKey}">
+                  <content>Order #{businessKey} approved</content>
+                </message>
               </action>
               <action id="approve-order"
                       event="complete"
@@ -81,9 +82,9 @@ class DefaultActionDispatcherTest {
                           type="job"
                           doType="message"
                           sync="false">
-                    <target>dingtalk</target>
-                    <template_id>order-approved</template_id>
-                    <template>Order #{businessKey} approved</template>
+                    <message channel="dingtalk" to="#{businessKey}">
+                      <content>Order #{businessKey} approved</content>
+                    </message>
                   </action>
                 </actions>
                 """;
@@ -106,7 +107,9 @@ class DefaultActionDispatcherTest {
         assertEquals(ActionDoType.MESSAGE, message.definition().doType());
         assertSame(invocation, message.invocation());
         assertEquals("notify-sales", message.definition().actionId());
-        assertEquals("dingtalk", message.definition().nodes().get(0).text());
+        assertEquals(
+                "dingtalk",
+                message.definition().nodes().get(0).attributes().get("channel"));
     }
 
     @Test
@@ -171,6 +174,36 @@ class DefaultActionDispatcherTest {
         assertEquals("script", published.get(0).definition().nodes().get(0).name());
     }
 
+    @Test
+    void asyncTaskIdChangesWhenSameActivityIsExecutedAgain() {
+        List<InstructionMsg> published = new ArrayList<>();
+        String xml = """
+                <actions>
+                  <action id="export-file"
+                          event="complete"
+                          type="job"
+                          doType="export"
+                          sync="false">
+                    <target fileType="csv" expTaskId="task_order_export_csv" />
+                  </action>
+                </actions>
+                """;
+        DefaultActionDispatcher dispatcher = new DefaultActionDispatcher(
+                new DefaultActionDefinitionParser(),
+                (type, doType) -> {
+                    throw new AssertionError("Async actions must not execute synchronously");
+                },
+                published::add);
+
+        dispatcher.dispatch(invocation(xml, "TASK-1"));
+        dispatcher.dispatch(invocation(xml, "TASK-2"));
+
+        assertEquals(2, published.size());
+        assertNotEquals(
+                published.get(0).taskId(),
+                published.get(1).taskId());
+    }
+
     private BusinessAction actionAddingTo(List<String> operations) {
         return new BusinessAction() {
             @Override
@@ -191,11 +224,15 @@ class DefaultActionDispatcherTest {
     }
 
     private ActionInvocation invocation(String xml) {
+        return invocation(xml, "TASK-1");
+    }
+
+    private ActionInvocation invocation(String xml, String workflowTaskId) {
         ActionContext context = new ActionContext(
                 "ORDER-100",
                 "order-approval",
                 "PROCESS-1",
-                "TASK-1",
+                workflowTaskId,
                 "manager-approval",
                 Map.of("orderStatus", "APPROVING"),
                 Map.of("channel", "source"));

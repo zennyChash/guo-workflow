@@ -1,11 +1,14 @@
 package com.guo.workflow.async;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.guo.workflow.contract.ActionContext;
 import com.guo.workflow.contract.BusinessAction;
 import com.guo.workflow.contract.InstructionMsg;
 import com.guo.workflow.dispatcher.BusinessActionRegistry;
+import org.flowable.engine.RuntimeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskExecutor;
@@ -21,7 +24,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -81,6 +87,7 @@ public class AsyncTaskConsumer {
                 claim_token = NULL,
                 next_retry_time = NULL,
                 error_msg = NULL,
+                result_json = ?,
                 update_time = CURRENT_TIMESTAMP
             WHERE task_id = ?
               AND status = 'PROCESSING'
@@ -119,6 +126,7 @@ public class AsyncTaskConsumer {
     private final long retryMaxDelaySeconds;
     private final double jitterRatio;
     private final long processingTimeoutSeconds;
+    private RuntimeService runtimeService;
 
     public AsyncTaskConsumer(
             JdbcTemplate jdbcTemplate,
@@ -152,6 +160,11 @@ public class AsyncTaskConsumer {
         this.retryMaxDelaySeconds = retryMaxDelaySeconds;
         this.jitterRatio = jitterRatio;
         this.processingTimeoutSeconds = processingTimeoutSeconds;
+    }
+
+    @Autowired(required = false)
+    public void setRuntimeService(RuntimeService runtimeService) {
+        this.runtimeService = runtimeService;
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -242,6 +255,9 @@ public class AsyncTaskConsumer {
             return;
         }
 
+        ActionContext context = task.message().invocation().context();
+        Map<String, Object> variablesBefore =
+                new LinkedHashMap<>(context.variables());
         try {
             BusinessAction action = registry.resolve(
                     task.message().type(),
@@ -253,7 +269,27 @@ public class AsyncTaskConsumer {
             return;
         }
 
-        markSuccess(taskId, claimToken, task.message());
+        Map<String, Object> producedVariables =
+                changedVariables(variablesBefore, context.variables());
+        String resultJson;
+        try {
+            resultJson = producedVariables.isEmpty()
+                    ? null
+                    : objectMapper.writeValueAsString(producedVariables);
+        } catch (Exception exception) {
+            log.error("Failed to serialize async action result taskId={}", taskId, exception);
+            handleFailure(taskId, claimToken, task, exception);
+            return;
+        }
+
+        boolean markedSuccessful = markSuccess(
+                taskId,
+                claimToken,
+                task.message(),
+                resultJson);
+        if (markedSuccessful) {
+            writeProcessVariables(context, producedVariables);
+        }
     }
 
     private Optional<LoadedTask> loadClaimedTask(String taskId, String claimToken) {
@@ -287,9 +323,17 @@ public class AsyncTaskConsumer {
         }
     }
 
-    private void markSuccess(String taskId, String claimToken, InstructionMsg message) {
+    private boolean markSuccess(
+            String taskId,
+            String claimToken,
+            InstructionMsg message,
+            String resultJson) {
         try {
-            int updated = jdbcTemplate.update(MARK_SUCCESS_SQL, taskId, claimToken);
+            int updated = jdbcTemplate.update(
+                    MARK_SUCCESS_SQL,
+                    resultJson,
+                    taskId,
+                    claimToken);
             if (updated == 1) {
                 log.info(
                         "Async task succeeded taskId={}, type={}, businessKey={}",
@@ -299,9 +343,57 @@ public class AsyncTaskConsumer {
             } else {
                 log.warn("Stale async task completion ignored taskId={}", taskId);
             }
+            return updated == 1;
         } catch (RuntimeException exception) {
             log.error("Failed to mark async task as SUCCESS taskId={}", taskId, exception);
+            return false;
         }
+    }
+
+    private void writeProcessVariables(
+            ActionContext context,
+            Map<String, Object> producedVariables) {
+        if (runtimeService == null
+                || producedVariables.isEmpty()
+                || context.processInstanceId() == null
+                || context.processInstanceId().isBlank()) {
+            return;
+        }
+        try {
+            long activeProcesses = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(context.processInstanceId())
+                    .count();
+            if (activeProcesses == 0) {
+                log.info(
+                        "Process instance is no longer active; result remains in async task record processInstanceId={}",
+                        context.processInstanceId());
+                return;
+            }
+            runtimeService.setVariables(
+                    context.processInstanceId(),
+                    producedVariables);
+            log.info(
+                    "Persisted async action result variables processInstanceId={}, variableCount={}",
+                    context.processInstanceId(),
+                    producedVariables.size());
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Failed to persist async action result variables processInstanceId={}",
+                    context.processInstanceId(),
+                    exception);
+        }
+    }
+
+    private Map<String, Object> changedVariables(
+            Map<String, Object> before,
+            Map<String, Object> after) {
+        Map<String, Object> changed = new LinkedHashMap<>();
+        after.forEach((name, value) -> {
+            if (!before.containsKey(name) || !Objects.equals(before.get(name), value)) {
+                changed.put(name, value);
+            }
+        });
+        return changed;
     }
 
     private void handleFailure(
